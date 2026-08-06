@@ -40,7 +40,7 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev")); // 
 // ── Rate Limiting ──
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,                  // max 200 requests per IP
+  max: 500,                  // max 200 requests per IP
   message: { success: false, message: "Too many requests. Please try again after 15 minutes." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -55,8 +55,27 @@ const authLimiter = rateLimit({
 app.use(globalLimiter);
 
 // ── Core Middleware ──
+// app.use(cors({
+//   origin: process.env.CLIENT_URL || "http://localhost:5173",
+//   credentials: true,
+// }));
+const allowedOrigins = [
+  "http://localhost:5173",
+  process.env.CLIENT_URL,
+  process.env.CLIENT_URL_WWW,
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  origin: function (origin, callback) {
+    // Postman/mobile apps/no-origin requests
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("CORS not allowed"));
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: "10mb" }));
