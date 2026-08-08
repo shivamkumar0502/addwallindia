@@ -25,6 +25,7 @@ const adminRoutes = require("./routes/admin.routes");
 const disputeRoutes = require("./routes/dispute.routes");
 const chatbotRoutes = require("./routes/chatbot.routes");
 const chatRoutes = require("./routes/chat.routes");
+const featuredRoutes = require("./routes/featured.routes");
 // const chatbotRoutes = require("./routes/chatbot.routes");
 const { errorHandler, notFound } = require("./middlewares/error.middleware");
 
@@ -111,7 +112,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/disputes", disputeRoutes);
 app.use("/api/chatbot", chatbotRoutes);
 app.use("/api/chat", chatRoutes);
-app.use("/api/chatbot", chatbotRoutes);
+// app.use("/api/chatbot", chatbotRoutes);
+app.use("/api/featured", featuredRoutes);
 // ── Error Handling ──
 app.use(notFound);
 app.use(errorHandler);
