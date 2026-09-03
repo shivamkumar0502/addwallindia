@@ -67,8 +67,8 @@ const emailTemplate = (title, body, ctaText = null, ctaLink = null) => `
           <td style="background:#f9fafb;padding:20px 32px;border-top:1px solid #e5e7eb;">
             <p style="margin:0;color:#6b7280;font-size:12px;text-align:center;">
               AdWall India — India ka #1 Outdoor Advertising Marketplace<br/>
-              <a href="https://adwall.in" style="color:#f97316;">adwall.in</a> | 
-              <a href="mailto:support@adwall.in" style="color:#f97316;">support@adwall.in</a>
+              <a href="https://adwallindia.com" style="color:#f97316;">adwall.in</a> | 
+              <a href="shivamkumartek123@gmail.com" style="color:#f97316;">support@adwall.in</a>
             </p>
           </td>
         </tr>
@@ -81,34 +81,165 @@ const emailTemplate = (title, body, ctaText = null, ctaLink = null) => `
 /* ─────────────────────────────────────────
    Core senders
 ───────────────────────────────────────── */
-const sendEmail = async ({ to, subject, html }) => {
-  if (process.env.NOTIFY_EMAIL === "false" || !process.env.EMAIL_USER) return;
+const toE164 = (mobile) => {
+  const cleaned = String(mobile || "").replace(/\D/g, "");
+  if (!cleaned || cleaned.length < 10) return null;
+  return cleaned.startsWith("91") && cleaned.length === 12
+    ? `+${cleaned}`
+    : `+91${cleaned.slice(-10)}`;
+};
+
+/* ─────────────────────────────────────────
+   WhatsApp via Twilio WhatsApp Business API
+   (Twilio me WhatsApp sender approve karwao pehle)
+───────────────────────────────────────── */
+const sendWhatsApp = async (mobile, message) => {
+  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_WHATSAPP_FROM) return false;
+  if (String(mobile).startsWith("pending")) return false;
+  const to = toE164(mobile);
+  if (!to) return false;
+
+  const client = getSmsClient();
+  if (!client) return false;
+
   try {
-    await transporter.sendMail({ from: process.env.EMAIL_FROM || "AdWall India <noreply@adwall.in>", to, subject, html });
+    await client.messages.create({
+      body: message,
+      from: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`,
+      to: `whatsapp:${to}`,
+    });
+    console.log(`💬 WhatsApp sent → ${to}`);
+    return true;
+  } catch (err) {
+    console.error(`❌ WhatsApp failed → ${to}:`, err.message);
+    if (err.message?.includes("Channel with the specified From")) {
+      console.error(
+        "   ↳ TWILIO_WHATSAPP_FROM galat hai. Sandbox ke liye +14155238886 use karo\n" +
+        "     aur pehle apne number se sandbox join karo."
+      );
+    }
+    return false;
+  }
+};
+
+// Returns true/false — caller ko pata chalna chahiye ki mail sach me gaya ya nahi
+const sendEmail = async ({ to, subject, html }) => {
+  if (process.env.NOTIFY_EMAIL === "false" || !process.env.EMAIL_USER) {
+    console.warn("⚠️  Email skip: EMAIL_USER set nahi hai (ya NOTIFY_EMAIL=false)");
+    return false;
+  }
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || "AdWall India <noreply@adwallindia.com>",
+      to, subject, html,
+    });
     console.log(`📧 Email sent → ${to}`);
+    return true;
   } catch (err) {
     console.error(`❌ Email failed → ${to}:`, err.message);
+    if (err.message?.includes("BadCredentials") || err.message?.includes("535")) {
+      console.error(
+        "   ↳ Gmail normal password accept nahi karta. Google Account → Security →\n" +
+        "     2-Step Verification ON karo → App passwords → 16-digit password banao\n" +
+        "     aur wahi EMAIL_PASS me daalo (space hata ke)."
+      );
+    }
+    return false;
+  }
+};
+
+/* ─────────────────────────────────────────
+   SMS — Fast2SMS primary, Twilio fallback
+
+   Fast2SMS ka "q" (Quick SMS) route India me OTP ke liye
+   DLT template approval ke bina kaam karta hai — isliye ye
+   sabse aasan option hai. Sirf .env me ye ek line chahiye:
+
+     FAST2SMS_API_KEY=<dashboard -> Dev API -> API Key>
+
+   Twilio tabhi use hoga jab Fast2SMS key na ho.
+───────────────────────────────────────── */
+const sendViaFast2SMS = async (to, message) => {
+  const key = process.env.FAST2SMS_API_KEY;
+  if (!key) return false;
+
+  // Fast2SMS sirf 10-digit Indian number leta hai, +91 nahi
+  const number = to.replace(/^\+91/, "");
+  if (!/^[6-9]\d{9}$/.test(number)) return false;
+
+  try {
+    const res = await fetch("https://www.fast2sms.com/dev/bulkV2", {
+      method: "POST",
+      headers: {
+        authorization: key,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        route: "q",           // Quick SMS — DLT template nahi chahiye
+        message,
+        language: "english",
+        numbers: number,
+      }),
+    });
+
+    const data = await res.json();
+    if (data.return === true) {
+      console.log(`📱 SMS sent (Fast2SMS) → ${number}`);
+      return true;
+    }
+
+    console.error(`❌ Fast2SMS → ${number}:`, data.message || JSON.stringify(data));
+    return false;
+  } catch (err) {
+    console.error(`❌ Fast2SMS → ${number}:`, err.message);
+    return false;
+  }
+};
+
+const sendViaTwilio = async (to, message) => {
+  const client = getSmsClient();
+  if (!client) return false;
+
+  const from = process.env.TWILIO_PHONE_FROM || process.env.TWILIO_MESSAGING_SERVICE_SID;
+  if (!from) return false;
+
+  try {
+    const payload = { body: message, to };
+    if (from.startsWith("MG")) payload.messagingServiceSid = from;
+    else payload.from = from;
+
+    await client.messages.create(payload);
+    console.log(`📱 SMS sent (Twilio) → ${to}`);
+    return true;
+  } catch (err) {
+    console.error(`❌ Twilio SMS → ${to}:`, err.message);
+    return false;
   }
 };
 
 const sendSMS = async (mobile, message) => {
-  if (process.env.NOTIFY_SMS === "false" || !mobile) return;
-  // Clean mobile number
-  const cleaned = mobile?.replace(/\D/g, "");
-  if (!cleaned || cleaned.length < 10 || cleaned.startsWith("pending")) return;
+  if (process.env.NOTIFY_SMS === "false" || !mobile) return false;
+  if (String(mobile).startsWith("pending")) return false;
 
-  const client = getSmsClient();
-  if (!client) {
-    console.log(`📱 SMS (no Twilio key) → ${mobile}: ${message}`);
-    return;
-  }
-  try {
-    const to = cleaned.startsWith("91") ? `+${cleaned}` : `+91${cleaned.slice(-10)}`;
-    await client.messages.create({ body: message, from: process.env.TWILIO_PHONE_FROM, to });
-    console.log(`📱 SMS sent → ${to}`);
-  } catch (err) {
-    console.error(`❌ SMS failed → ${mobile}:`, err.message);
-  }
+  const to = toE164(mobile);
+  if (!to) return false;
+
+  if (await sendViaFast2SMS(to, message)) return true;
+  if (await sendViaTwilio(to, message)) return true;
+
+  console.warn(
+    `⚠️  SMS nahi gaya → ${to}. .env me FAST2SMS_API_KEY (ya Twilio ka ` +
+    `TWILIO_PHONE_FROM) set karo. Message: ${message}`
+  );
+  return false;
+};
+
+/* ─────────────────────────────────────────
+   Ek hi call me SMS + WhatsApp dono
+   (jo channel configured hoga wahi jaayega)
+───────────────────────────────────────── */
+const sendPhone = async (mobile, message) => {
+  await Promise.all([sendSMS(mobile, message), sendWhatsApp(mobile, message)]);
 };
 
 const createInAppNotification = async ({ userId, title, message, type, reference, referenceModel }) => {
@@ -128,7 +259,7 @@ const notifyNewBooking = async (booking, client, owner) => {
   const msg = `AdWall: Naya booking request aaya hai! ${client.name} ne aapki hoarding book karne ki request ki hai. App pe dekho aur quote bhejo.`;
 
   await Promise.all([
-    sendSMS(owner.mobile, msg),
+    sendPhone(owner.mobile, msg),
     sendEmail({
       to: owner.email,
       subject: "📋 Naya Booking Request — AdWall India",
@@ -155,7 +286,7 @@ const notifyQuoteReceived = async (quote, client, owner) => {
   const msg = `AdWall: ${owner.name} ne ${amount} ka quote bheja hai. App pe dekho aur accept/reject karo.`;
 
   await Promise.all([
-    sendSMS(client.mobile, msg),
+    sendPhone(client.mobile, msg),
     sendEmail({
       to: client.email,
       subject: `💰 Naya Quote Aaya — ${amount} — AdWall India`,
@@ -183,7 +314,7 @@ const notifyQuoteAccepted = async (quote, booking, client, owner) => {
   const msg = `AdWall: ${client.name} ne aapka ${amount} ka quote ACCEPT kar liya! Ab payment ka wait karo.`;
 
   await Promise.all([
-    sendSMS(owner.mobile, msg),
+    sendPhone(owner.mobile, msg),
     sendEmail({
       to: owner.email,
       subject: `✅ Quote Accept Ho Gaya — ${amount} — AdWall India`,
@@ -211,7 +342,7 @@ const notifyPaymentDone = async (payment, booking, client, owner) => {
 
   await Promise.all([
     // Owner ko SMS
-    sendSMS(owner.mobile, msg),
+    sendPhone(owner.mobile, msg),
     // Owner ko Email
     sendEmail({
       to: owner.email,
@@ -246,7 +377,7 @@ const notifyPaymentDone = async (payment, booking, client, owner) => {
       ),
     }),
     // Client ko bhi confirmation
-    sendSMS(client.mobile, `AdWall: Payment successful! ₹${payment.amount.toLocaleString("en-IN")} escrow mein safe hai. Owner installation complete karega.`),
+    sendPhone(client.mobile, `AdWall: Payment successful! ₹${payment.amount.toLocaleString("en-IN")} escrow mein safe hai. Owner installation complete karega.`),
     sendEmail({
       to: client.email,
       subject: `✅ Payment Successful — ${amount} — AdWall India`,
@@ -274,7 +405,7 @@ const notifyProofSubmitted = async (booking, client, owner) => {
   const msg = `AdWall: ${owner.name} ne installation complete kar diya aur proof submit kar diya. App pe dekho aur approve karo taaki payment release ho.`;
 
   await Promise.all([
-    sendSMS(client.mobile, msg),
+    sendPhone(client.mobile, msg),
     sendEmail({
       to: client.email,
       subject: "📸 Installation Proof Submitted — Approve Karo — AdWall India",
@@ -301,7 +432,7 @@ const notifyPaymentReleased = async (payment, owner, booking) => {
   const msg = `AdWall: 🎉 PAYMENT RELEASE! ${payout} aapke AdWall wallet mein aa gaya! Withdrawal ke liye app pe dekho.`;
 
   await Promise.all([
-    sendSMS(owner.mobile, msg),
+    sendPhone(owner.mobile, msg),
     sendEmail({
       to: owner.email,
       subject: `🎉 Payment Released — ${payout} — AdWall India`,
@@ -330,7 +461,7 @@ const notifyKycStatus = async (owner, status, rejectionReason = "") => {
     : `AdWall: Aapka KYC reject hua. Reason: ${rejectionReason || "Documents unclear"}. Dobara submit karo.`;
 
   await Promise.all([
-    sendSMS(owner.mobile, msg),
+    sendPhone(owner.mobile, msg),
     sendEmail({
       to: owner.email,
       subject: isVerified ? "✅ KYC Verified — AdWall India" : "❌ KYC Rejected — AdWall India",
@@ -370,7 +501,7 @@ const notifyHoardingStatus = async (hoarding, owner, status, rejectionReason = "
     : `AdWall: Hoarding "${hoarding.title}" reject hui. Reason: ${rejectionReason}. Update karke resubmit karo.`;
 
   await Promise.all([
-    sendSMS(owner.mobile, msg),
+    sendPhone(owner.mobile, msg),
     sendEmail({
       to: owner.email,
       subject: isVerified ? "✅ Hoarding Verified — AdWall India" : "❌ Hoarding Rejected — AdWall India",
@@ -396,7 +527,7 @@ const notifyCancellation = async (booking, cancelledBy, client, owner) => {
   const msg = `AdWall: Booking cancel ho gayi. ${cancellerName} ne cancel kiya. App pe details dekho.`;
 
   await Promise.all([
-    sendSMS(notifyUser.mobile, msg),
+    sendPhone(notifyUser.mobile, msg),
     sendEmail({
       to: notifyUser.email,
       subject: "❌ Booking Cancelled — AdWall India",
@@ -416,6 +547,8 @@ const notifyCancellation = async (booking, cancelledBy, client, owner) => {
 module.exports = {
   sendEmail,
   sendSMS,
+  sendWhatsApp,
+  sendPhone,
   createInAppNotification,
   notifyNewBooking,
   notifyQuoteReceived,
@@ -427,30 +560,3 @@ module.exports = {
   notifyHoardingStatus,
   notifyCancellation,
 };
-
-/* ─────────────────────────────────────────
-   WhatsApp via Twilio WhatsApp Business API
-   (Twilio me WhatsApp sender approve karwao pehle)
-───────────────────────────────────────── */
-const sendWhatsApp = async (mobile, message) => {
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_WHATSAPP_FROM) return;
-  const cleaned = mobile?.replace(/\D/g, "");
-  if (!cleaned || cleaned.length < 10 || cleaned.startsWith("pending")) return;
-
-  const client = getSmsClient();
-  if (!client) return;
-
-  try {
-    const to = cleaned.startsWith("91") ? `+${cleaned}` : `+91${cleaned.slice(-10)}`;
-    await client.messages.create({
-      body: message,
-      from: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`,
-      to: `whatsapp:${to}`,
-    });
-    console.log(`💬 WhatsApp sent → ${to}`);
-  } catch (err) {
-    console.error(`❌ WhatsApp failed → ${mobile}:`, err.message);
-  }
-};
-
-module.exports.sendWhatsApp = sendWhatsApp;

@@ -2,6 +2,7 @@ const OTP = require("../models/OTP.model");
 const User = require("../models/User.model");
 const ApiResponse = require("../utils/apiResponse");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const notify = require("../services/notification.service");
 
 // 6-digit OTP generate karo
@@ -101,8 +102,11 @@ const resetPassword = async (req, res) => {
     const user = await User.findById(otpDoc.userId);
     if (!user) return res.status(404).json(new ApiResponse(404, null, "User not found"));
 
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
+    // FIX: pehle yahan bcrypt.hash() kiya jaata tha AUR User model ka
+    // pre("save") hook bhi hash karta hai — password DOUBLE hash ho jaata tha.
+    // Isliye reset ke baad naye password se login kabhi nahi hota tha.
+    // Plain password assign karo, hashing hook khud kar lega.
+    user.password = newPassword;
     await user.save();
 
     // OTP used mark karo
@@ -187,4 +191,184 @@ const verifyMobileOTP = async (req, res) => {
   } catch (err) { return res.status(500).json(new ApiResponse(500, null, err.message)); }
 };
 
-module.exports = { forgotPassword, resetPassword, sendMobileOTP, verifyMobileOTP };
+
+/* ─────────────────────────────────────────────────────────
+   REGISTRATION OTP FLOW
+   User khud choose karta hai — email PE ya mobile PE, ek hi.
+   Flow:
+     1) POST /api/otp/send-register-otp
+        { email, mobile, channel: "email" | "mobile" }
+     2) POST /api/otp/verify-register-otp
+        { email, mobile, channel, otp }  ->  { verifyToken }  (15 min)
+     3) POST /api/auth/register { ..., verifyToken }
+───────────────────────────────────────────────────────── */
+
+// @route POST /api/otp/send-register-otp
+// @access Public
+const sendRegisterOTP = async (req, res) => {
+  try {
+    const email = req.body.email?.toLowerCase().trim();
+    const mobile = req.body.mobile?.trim();
+    const channel = req.body.channel === "mobile" ? "mobile" : "email";
+
+    if (!email || !/^\S+@\S+\.\S+$/.test(email))
+      return res.status(400).json(new ApiResponse(400, null, "Valid email daalo"));
+    if (!mobile || !/^[6-9]\d{9}$/.test(mobile))
+      return res.status(400).json(new ApiResponse(400, null, "Valid 10-digit mobile number daalo"));
+
+    const existing = await User.findOne({ $or: [{ email }, { mobile }] });
+    if (existing)
+      return res
+        .status(409)
+        .json(new ApiResponse(409, null, "Is email ya mobile se account pehle se hai. Login karo."));
+
+    // Jis channel pe bhej rahe hain, wahi identifier hai
+    const identifier = channel === "mobile" ? mobile : email;
+    const type = channel === "mobile" ? "mobile_verify" : "email_verify";
+
+    // Resend rate limit — 60 sec
+    const recent = await OTP.findOne({
+      identifier,
+      type,
+      createdAt: { $gt: new Date(Date.now() - 60 * 1000) },
+    });
+    if (recent)
+      return res
+        .status(429)
+        .json(new ApiResponse(429, null, "Thodi der ruko — 60 second baad dobara bhejo."));
+
+    await OTP.deleteMany({ identifier, type });
+
+    const otp = generateOTP();
+    await OTP.create({ identifier, otp, type, expiresAt: getExpiry() });
+
+    // ── Bhejo, aur SACH ME gaya ya nahi wo track karo ──
+    let delivered = false;
+
+    if (channel === "mobile") {
+      delivered = await notify.sendSMS(
+        mobile,
+        `AdWall India: Aapka verification code hai ${otp}. 10 min me expire hoga. Kisi ke saath share mat karo.`
+      );
+      if (!delivered) {
+        delivered = await notify.sendWhatsApp(
+          mobile,
+          `AdWall India: Aapka verification code hai *${otp}*. 10 min me expire hoga.`
+        );
+      }
+    } else {
+      delivered = await notify.sendEmail({
+        to: email,
+        subject: `${otp} — AdWall India verification code`,
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
+            <div style="background:#f97316;padding:20px;border-radius:12px 12px 0 0;text-align:center;">
+              <h1 style="color:#fff;margin:0;font-size:24px;">AdWall India</h1>
+            </div>
+            <div style="background:#fff;border:1px solid #e5e7eb;border-radius:0 0 12px 12px;padding:30px;text-align:center;">
+              <h2 style="color:#111827;">Email Verification</h2>
+              <p style="color:#6b7280;">Account banane ke liye ye code daalo:</p>
+              <div style="background:#fff7ed;border:2px solid #fed7aa;border-radius:12px;padding:20px;margin:20px 0;">
+                <p style="font-size:40px;font-weight:900;color:#f97316;letter-spacing:8px;margin:0;">${otp}</p>
+              </div>
+              <p style="color:#6b7280;font-size:14px;">10 minutes ke liye valid hai. Kisi ke saath share mat karo.</p>
+            </div>
+          </div>`,
+      });
+    }
+
+    const isDev = process.env.NODE_ENV !== "production";
+
+    // FIX: pehle delivery fail hone pe bhi 200 aata tha aur user
+    // OTP ka wait karta rehta tha. Ab saaf batao.
+    if (!delivered && !isDev) {
+      await OTP.deleteMany({ identifier, type });
+      return res.status(502).json(
+        new ApiResponse(
+          502,
+          null,
+          channel === "mobile"
+            ? "SMS bhejne me problem aayi. Email pe OTP mangwa ke try karo."
+            : "Email bhejne me problem aayi. Mobile pe OTP mangwa ke try karo."
+        )
+      );
+    }
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        isDev ? { otp, delivered } : null,
+        delivered
+          ? channel === "mobile"
+            ? `OTP bhej diya! +91 ${mobile} check karo.`
+            : `OTP bhej diya! ${email} check karo (spam folder bhi).`
+          : "Dev mode: delivery configure nahi hai, OTP screen pe dikha diya hai."
+      )
+    );
+  } catch (err) {
+    console.error("sendRegisterOTP:", err);
+    return res.status(500).json(new ApiResponse(500, null, err.message));
+  }
+};
+
+// @route POST /api/otp/verify-register-otp
+// @access Public
+const verifyRegisterOTP = async (req, res) => {
+  try {
+    const email = req.body.email?.toLowerCase().trim();
+    const mobile = req.body.mobile?.trim();
+    const channel = req.body.channel === "mobile" ? "mobile" : "email";
+    const entered = String(req.body.otp || "").trim();
+
+    if (!email || !mobile || !entered)
+      return res.status(400).json(new ApiResponse(400, null, "Email, mobile aur OTP required hain"));
+
+    const identifier = channel === "mobile" ? mobile : email;
+    const type = channel === "mobile" ? "mobile_verify" : "email_verify";
+
+    const doc = await OTP.findOne({ identifier, type, isUsed: false });
+    if (!doc)
+      return res.status(400).json(new ApiResponse(400, null, "OTP invalid ya expire ho gaya. Dobara bhejo."));
+
+    if (doc.attempts >= 5) {
+      await OTP.deleteOne({ _id: doc._id });
+      return res.status(400).json(new ApiResponse(400, null, "Bahut galat attempts. Dobara OTP bhejo."));
+    }
+
+    if (new Date() > doc.expiresAt)
+      return res.status(400).json(new ApiResponse(400, null, "OTP expire ho gaya. Dobara bhejo."));
+
+    if (doc.otp !== entered) {
+      doc.attempts += 1;
+      await doc.save();
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, `Wrong OTP. ${5 - doc.attempts} attempts bache hain.`));
+    }
+
+    doc.isUsed = true;
+    await doc.save();
+
+    const verifyToken = jwt.sign(
+      { email, mobile, channel, purpose: "register" },
+      process.env.JWT_ACCESS_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, { verifyToken }, "Verified! Account ban raha hai..."));
+  } catch (err) {
+    console.error("verifyRegisterOTP:", err);
+    return res.status(500).json(new ApiResponse(500, null, err.message));
+  }
+};
+
+module.exports = {
+  forgotPassword,
+  resetPassword,
+  sendMobileOTP,
+  verifyMobileOTP,
+  sendRegisterOTP,
+  verifyRegisterOTP,
+};

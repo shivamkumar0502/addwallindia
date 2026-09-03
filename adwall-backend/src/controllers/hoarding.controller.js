@@ -70,7 +70,8 @@ const searchHoardings = async (req, res) => {
       minPrice, maxPrice,
       lighting, dailyTraffic,
       page = 1, limit = 12,
-      sortBy = "createdAt",    // createdAt | price | rating
+      sortBy = "createdAt",    // createdAt | price | rating | distance
+      lat, lng, radius,        // "near me" search ke liye (radius km me)
     } = req.query;
 
     const query = { verificationStatus: "verified", isActive: true };
@@ -88,20 +89,42 @@ const searchHoardings = async (req, res) => {
       if (maxPrice) query["pricing.perMonth"].$lte = parseInt(maxPrice);
     }
 
+    // ── Near me search (naya) ──
+    // Model me 2dsphere index pehle se tha par koi geo query nahi thi.
+    // ?lat=25.61&lng=85.14&radius=10  →  10 km ke andar wali hoardings
+    const hasGeo = lat && lng && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng));
+    if (hasGeo) {
+      const km = Math.min(parseFloat(radius) || 10, 500); // max 500 km
+      query["location.coordinates"] = {
+        $nearSphere: {
+          $geometry: {
+            type: "Point",
+            coordinates: [parseFloat(lng), parseFloat(lat)], // GeoJSON order
+          },
+          $maxDistance: km * 1000, // meters
+        },
+      };
+    }
+
     // Sort logic
-    let sortOption = { createdAt: -1 };
-    if (sortBy === "price") sortOption = { "pricing.perMonth": 1 };
-    if (sortBy === "rating") sortOption = { rating: -1 };
+    // $nearSphere khud distance ke hisaab se sort karta hai — uspe
+    // .sort() lagaya to wo order tut jaata hai.
+    let sortOption = hasGeo ? null : { createdAt: -1 };
+    if (!hasGeo) {
+      if (sortBy === "price") sortOption = { "pricing.perMonth": 1 };
+      if (sortBy === "rating") sortOption = { rating: -1 };
+    }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const [hoardings, total] = await Promise.all([
-      Hoarding.find(query)
-        .populate("owner", "name businessDetails.agencyName") // owner ka naam aur agency
-        .select("-__v")
-        .sort(sortOption)
-        .skip(skip)
-        .limit(parseInt(limit)),
+      (() => {
+        let q = Hoarding.find(query)
+          .populate("owner", "name businessDetails.agencyName")
+          .select("-__v");
+        if (sortOption) q = q.sort(sortOption);
+        return q.skip(skip).limit(parseInt(limit));
+      })(),
       Hoarding.countDocuments(query),
     ]);
 
