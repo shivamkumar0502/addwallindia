@@ -306,9 +306,11 @@ export const reviewService = {
 // AGREEMENTS
 // ────────────────────────────────────────
 export const agreementService = {
-  generate: (bookingId) => api.post("/agreements/generate", { bookingId }),
+  // FIX: backend route POST /agreements/generate/:bookingId hai (URL me),
+  // yahan bookingId body me bheja jaa raha tha -> "Route not found"
+  generate: (bookingId) => api.post(`/agreements/generate/${bookingId}`),
   getByBooking: (bookingId) => api.get(`/agreements/booking/${bookingId}`),
-  sign: (id) => api.patch(`/agreements/${id}/sign`),
+  sign: (id) => api.post(`/agreements/${id}/sign`), // FIX: backend POST expect karta hai, PATCH nahi
 };
 
 // ────────────────────────────────────────
@@ -449,16 +451,8 @@ export const adminService = {
 // OTP
 // ────────────────────────────────────────
 export const otpService = {
-  // Password reset
   forgotPassword: (email) => api.post("/otp/forgot-password", { email }),
   resetPassword: (data) => api.post("/otp/reset-password", data),
-
-  // Registration — { email, mobile, channel: "email" | "mobile" }
-  sendRegisterOtp: (data) => api.post("/otp/send-register-otp", data),
-  // { email, mobile, channel, otp } -> { verifyToken }
-  verifyRegisterOtp: (data) => api.post("/otp/verify-register-otp", data),
-
-  // Logged-in user ka mobile change/verify
   sendMobileOtp: (mobile) => api.post("/otp/send-mobile-otp", { mobile }),
   verifyMobileOtp: (data) => api.post("/otp/verify-mobile", data),
-}
+};

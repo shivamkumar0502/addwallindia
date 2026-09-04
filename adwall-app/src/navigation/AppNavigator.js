@@ -12,6 +12,9 @@ import { colors } from "../theme/colors";
 import HomeScreen from "../screens/public/HomeScreen";
 import LoginScreen from "../screens/public/LoginScreen";
 import RegisterScreen from "../screens/public/RegisterScreen";
+// FIX: ForgotPassword pehle DashboardPlaceholder pe point karta tha —
+// screen khulti thi par kuch kaam nahi karti thi. Ab asli screen hai.
+import ForgotPasswordScreen from "../screens/public/ForgotPasswordScreen";
 import SearchScreen from "../screens/public/SearchScreen";
 import HoardingDetailScreen from "../screens/public/HoardingDetailScreen";
 import DashboardPlaceholder from "../screens/DashboardPlaceholder";
@@ -69,7 +72,7 @@ function PublicStack() {
       <Stack.Screen name="HoardingDetail" component={HoardingDetailScreen} options={{ headerShown: true, title: "" }} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
-      <Stack.Screen name="ForgotPassword" component={DashboardPlaceholder} initialParams={{ label: "Forgot Password" }} options={{ headerShown: true, title: "Forgot Password" }} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ headerShown: true, title: "Forgot Password" }} />
     </Stack.Navigator>
   );
 }

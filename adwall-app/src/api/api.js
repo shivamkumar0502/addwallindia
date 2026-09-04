@@ -109,8 +109,22 @@ export const authService = {
   logout: () => api.post("/auth/logout"),
 };
 
+// OTP — register verification + password reset (naya, web se match karta hai)
+export const otpService = {
+  sendRegisterOtp: (data) => api.post("/otp/send-register-otp", data),
+  verifyRegisterOtp: (data) => api.post("/otp/verify-register-otp", data),
+  forgotPassword: (email) => api.post("/otp/forgot-password", { email }),
+  resetPassword: (data) => api.post("/otp/reset-password", data),
+  sendMobileOtp: (mobile) => api.post("/otp/send-mobile-otp", { mobile }),
+  verifyMobileOtp: (data) => api.post("/otp/verify-mobile", data),
+};
+
+export const contactService = {
+  send: (data) => api.post("/contact", data),
+};
+
 export const hoardingService = {
-  search: (params) => api.get("/hoardings", { params }),
+  search: (params) => api.get("/hoardings", { params }), // lat/lng/radius bhi bhej sakte ho
   getById: (id) => api.get(`/hoardings/${id}`),
   getMyHoardings: () => api.get("/hoardings/my/listings"),
   add: (formData) => api.post("/hoardings", formData, { headers: { "Content-Type": "multipart/form-data" } }),

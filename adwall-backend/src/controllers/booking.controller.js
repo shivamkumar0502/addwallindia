@@ -76,7 +76,7 @@ const getOwnerBookings = async (req, res) => {
     const [bookings, total] = await Promise.all([
       Booking.find(query)
         .populate("hoarding", "title images location")
-        .populate("client", "name email mobile avatar")
+        .populate("client", "name email mobile avatar kycStatus") // kycStatus: owner ko verified advertiser dikhane ke liye
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(parseInt(limit)),
@@ -91,7 +91,7 @@ const getBookingById = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id)
       .populate("hoarding")
-      .populate("client", "name email mobile avatar")
+      .populate("client", "name email mobile avatar kycStatus") // kycStatus: owner ko verified advertiser dikhane ke liye
       .populate("owner", "name email mobile businessDetails")
       .populate("agreementId")
       .populate("paymentId");
@@ -212,7 +212,7 @@ const adminGetAllBookings = async (req, res) => {
     const query = status ? { status } : {};
     const [bookings, total] = await Promise.all([
       Booking.find(query)
-        .populate("client", "name email")
+        .populate("client", "name email kycStatus")
         .populate("owner", "name email")
         .populate("hoarding", "title location")
         .sort({ createdAt: -1 })

@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import Loader from "@/components/common/Loader";
 import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
 import { Calendar, ArrowRight, IndianRupee } from "lucide-react";
+import VerifiedBadge from "@/components/common/VerifiedBadge";
 
 const OwnerBookings = () => {
   const [status, setStatus] = useState("");
@@ -66,7 +67,11 @@ const OwnerBookings = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="font-semibold text-gray-900">{b.client?.name}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-gray-900">{b.client?.name}</p>
+                            {/* Owner ko dikhe ki advertiser KYC verified hai ya nahi */}
+                            <VerifiedBadge status={b.client?.kycStatus} size="xs" />
+                          </div>
                           <p className="text-xs text-gray-500">{b.client?.email}</p>
                         </div>
                         <Badge className={`text-xs flex-shrink-0 ${getStatusColor(b.status)}`}>
