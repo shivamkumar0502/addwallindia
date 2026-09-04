@@ -277,7 +277,7 @@ const app = express();
 // ── CORS — localhost + production domain dono allow ──
 const allowedOrigins = [
   "http://localhost:5173",
-  "http://localhost:5002",
+  "http://localhost:3000",
   "http://127.0.0.1:5173",
   process.env.CLIENT_URL,       // Hostinger URL
 ].filter(Boolean);

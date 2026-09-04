@@ -36,7 +36,7 @@ const FOUNDERS = [
   {
     name: "Shivam Kumar",
     role: "Co-Founder & Chief Technology Officer",
-    photo: "/team/shivam.jpg.jpeg",
+    photo: "/team/shivam.jpg",
     education: "NIT Sikkim — Undergraduate",
     bio:
       "Shivam owns the engineering side of the platform, from geospatial search and " +
