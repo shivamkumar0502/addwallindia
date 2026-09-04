@@ -40,7 +40,8 @@
       ],
       "expo-notifications",
       "expo-status-bar",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-font"
     ],
     "extra": {
       "apiUrl": "https://addwallindia-2.onrender.com/api",

@@ -274,6 +274,13 @@ const rateLimit = require("express-rate-limit");
 
 const app = express();
 
+// FIX: Render/Hostinger jaise proxy ke peeche chal rahe hain, isliye
+// X-Forwarded-For header aata hai. Iske bina express-rate-limit
+// ValidationError phenkta hai (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR) aur
+// saare users ko ek hi IP samajh ke rate limit lagata hai.
+// 1 = sirf pehle proxy pe bharosa karo (Render ka load balancer).
+app.set("trust proxy", 1);
+
 // ── CORS — localhost + production domain dono allow ──
 const allowedOrigins = [
   "http://localhost:5173",
