@@ -31,6 +31,14 @@ const Navbar = () => {
     return `/${user.role}/dashboard`;
   };
 
+  // FIX: Profile link hardcoded "/profile" pe jaa raha tha, par aisa koi
+  // route hai hi nahi — Profile nested route hai (/client/profile,
+  // /owner/profile, /admin/profile). Isliye click karne pe kuch nahi hota tha.
+  const getProfileLink = () => {
+    if (!user) return "/login";
+    return `/${user.role}/profile`;
+  };
+
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -83,7 +91,7 @@ const Navbar = () => {
                           <p className="text-xs text-gray-400 capitalize">{user.role}</p>
                         </div>
                         <Link to={getDashboardLink()} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onClick={() => setDropdownOpen(false)}>Dashboard</Link>
-                        <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onClick={() => setDropdownOpen(false)}>Profile</Link>
+                        <Link to={getProfileLink()} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onClick={() => setDropdownOpen(false)}>Profile</Link>
                         <div className="border-t my-1" />
                         <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50">Logout</button>
                       </div>

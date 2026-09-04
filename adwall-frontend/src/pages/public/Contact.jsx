@@ -4,15 +4,37 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Mail, Phone, MapPin, Clock, CheckCircle } from "lucide-react";
+import api from "@/services/api";
 
 const Contact = () => {
   const [form, setForm] = useState({ name: "", email: "", mobile: "", subject: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  // FIX: pehle ye sirf setSubmitted(true) karta tha — message kahin
+  // jaata hi nahi tha, par user ko "Message Send Ho Gaya!" dikh jaata tha.
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: Wire to backend contact API
-    setSubmitted(true);
+    setError("");
+    setLoading(true);
+    try {
+      await api.post("/contact", {
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
+        mobile: form.mobile.trim(),
+        subject: form.subject.trim(),
+        message: form.message.trim(),
+      });
+      setSubmitted(true);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Message bhejne me problem aayi. Thodi der baad try karo."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -61,6 +83,11 @@ const Contact = () => {
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <h2 className="text-xl font-bold text-gray-900 mb-4">Message Bhejo</h2>
+                    {error && (
+                      <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
+                        {error}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium text-gray-700 mb-1 block">Name *</label>
@@ -83,7 +110,9 @@ const Contact = () => {
                       <label className="text-sm font-medium text-gray-700 mb-1 block">Message *</label>
                       <Textarea placeholder="Detail mein batao..." value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} rows={5} required />
                     </div>
-                    <Button type="submit" className="w-full h-11">Send Message</Button>
+                    <Button type="submit" disabled={loading} className="w-full h-11">
+                      {loading ? "Bhej rahe hain..." : "Send Message"}
+                    </Button>
                   </form>
                 )}
               </CardContent>

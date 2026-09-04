@@ -13,6 +13,12 @@ import HoardingDetail from "@/pages/public/HoardingDetail";
 import Services from "@/pages/public/Services";
 import About from "@/pages/public/About";
 import Contact from "@/pages/public/Contact";
+// FIX: ye page banaya hua tha par route kabhi add nahi kiya —
+// isliye /forgot-password pe jaate hi 404 aata tha.
+import ForgotPassword from "@/pages/public/ForgotPassword";
+// FIX: MapView page bana hua tha par route missing tha — Search page ka
+// "Map View" button /map pe navigate karta hai aur 404 mil jaata tha.
+import MapView from "@/pages/public/MapView";
 
 // Shared
 import Profile from "@/pages/Profile";
@@ -82,6 +88,8 @@ const AppRoutes = () => (
       <Route path="/contact" element={<Contact />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/map" element={<MapView />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
   <Route path="/terms-and-conditions" element={<TermsConditions />} />
   <Route

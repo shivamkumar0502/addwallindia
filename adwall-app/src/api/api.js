@@ -1,45 +1,97 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
-// import Constants from "expo-constants";
 
-console.log("Expo Config =", Constants.expoConfig?.extra);
-console.log("API URL =", Constants.expoConfig?.extra?.apiUrl);
-// Set the correct base URL for your setup:
-// - Android Emulator -> http://10.0.2.2:5000/api  (already default in app.json)
-// - Real Android device on same WiFi -> http://<your-computer-LAN-IP>:5000/api
-const API_URL = Constants.expoConfig?.extra?.apiUrl || "http://192.168.1.6:5002/api";
-// const API_URL = "http://192.168.1.5:5002/api";
+// FIX: pehle default LAN IP (192.168.x.x:5002) tha — Expo Go / Play Store
+// build me backend kabhi connect nahi hota tha. Ab live Render URL default hai.
+const API_URL =
+  Constants.expoConfig?.extra?.apiUrl ||
+  "https://addwallindia-2.onrender.com/api";
 
-console.log("API URL =", API_URL);
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 30000, // Render free tier cold start slow hota hai
+  headers: { "Content-Type": "application/json" },
 });
 
-// Har request me access token automatically add karo
 api.interceptors.request.use(async (config) => {
   const token = await AsyncStorage.getItem("accessToken");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// NOTE: web version refreshes the access token using an httpOnly cookie
-// (res.cookie("refreshToken", ...)). React Native has no shared cookie jar
-// for axios, so cookie-based refresh won't work here as-is. Simplest and
-// most reliable fix on mobile: when a 401 hits, clear session and send the
-// user back to Login. (If you want silent refresh on mobile, the backend's
-// /auth/refresh route needs to also accept the refresh token in the request
-// body/header for RN clients — happy to add that on the backend if you want.)
 let onAuthFail = null;
 export const setOnAuthFail = (fn) => { onAuthFail = fn; };
+
+// FIX: RN me cookie jar nahi hai, isliye refresh token AsyncStorage se
+// body me bhejo. Backend /auth/refresh already body/header accept karta hai.
+let isRefreshing = false;
+let queue = [];
+const flush = (err, token) => {
+  queue.forEach((p) => (err ? p.reject(err) : p.resolve(token)));
+  queue = [];
+};
+
+const clearSession = async () => {
+  await AsyncStorage.multiRemove(["accessToken", "refreshToken", "adwall_user"]);
+  if (onAuthFail) onAuthFail();
+};
 
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
-    if (error.response?.status === 401) {
-      await AsyncStorage.multiRemove(["accessToken", "adwall_user"]);
-      if (onAuthFail) onAuthFail();
+    const original = error.config;
+
+    if (!error.response) {
+      // Network error — user ko saaf message do
+      error.friendlyMessage =
+        "Server se connect nahi ho paya. Internet check karo ya thodi der baad try karo.";
+      return Promise.reject(error);
     }
+
+    if (error.response.status === 401 && original && !original._retry) {
+      if (original.url?.includes("/auth/refresh") || original.url?.includes("/auth/login")) {
+        await clearSession();
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => queue.push({ resolve, reject }))
+          .then((token) => {
+            original.headers.Authorization = `Bearer ${token}`;
+            return api(original);
+          });
+      }
+
+      original._retry = true;
+      isRefreshing = true;
+      try {
+        const refreshToken = await AsyncStorage.getItem("refreshToken");
+        if (!refreshToken) throw new Error("no refresh token");
+
+        const { data } = await axios.post(
+          `${API_URL}/auth/refresh`,
+          { refreshToken },
+          { headers: { "x-refresh-token": refreshToken } }
+        );
+
+        const newToken = data.data.accessToken;
+        await AsyncStorage.setItem("accessToken", newToken);
+        if (data.data.refreshToken)
+          await AsyncStorage.setItem("refreshToken", data.data.refreshToken);
+
+        flush(null, newToken);
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return api(original);
+      } catch (e) {
+        flush(e, null);
+        await clearSession();
+        return Promise.reject(e);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
     return Promise.reject(error);
   }
 );
@@ -50,7 +102,10 @@ export default api;
 export const authService = {
   register: (data) => api.post("/auth/register", data),
   login: (data) => api.post("/auth/login", data),
-  googleLogin: (data) => api.post("/auth/google", data),
+  googleLogin: (token) => api.post("/auth/google", { token }),
+  googleComplete: (data) => api.post("/auth/google/complete", data),
+  refresh: (refreshToken) => api.post("/auth/refresh", { refreshToken }),
+  getMe: () => api.get("/auth/me"),
   logout: () => api.post("/auth/logout"),
 };
 
