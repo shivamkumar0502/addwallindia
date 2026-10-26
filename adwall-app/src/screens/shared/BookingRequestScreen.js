@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Platform, KeyboardAvoidingView, ActivityIndicator,
 } from "react-native";
+import { useAuth } from "../../context/AuthContext";
 import Calendar from "../../components/Calendar";
 import { Ionicons } from "@expo/vector-icons";
 import Button from "../../components/Button";
@@ -20,10 +21,13 @@ import { colors, radius } from "../../theme/colors";
 const fmt = (d) =>
   d ? d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "Select date";
 
-const toISO = (d) => d.toISOString().split("T")[0];
+// Calendar dates are local dates; UTC conversion shifts India midnight to yesterday.
+const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export default function BookingRequestScreen({ route, navigation }) {
   const { hoardingId } = route.params || {};
+  const { setBookingIntent } = useAuth();
+  useEffect(() => { setBookingIntent(null); }, [setBookingIntent]);
 
   const [hoarding, setHoarding] = useState(null);
   const [loadingHoarding, setLoadingHoarding] = useState(true);
@@ -50,6 +54,8 @@ export default function BookingRequestScreen({ route, navigation }) {
   }, [hoardingId]);
 
   const days = useMemo(() => {
+    if (!hoarding) return setError("Hoarding details load nahi hui. Peeche jaake dobara try karo.");
+    if (startDate && toISO(startDate) < toISO(new Date())) return setError("Start date aaj ya uske baad chuno");
     if (!startDate || !endDate) return 0;
     return Math.ceil((endDate - startDate) / 86400000);
   }, [startDate, endDate]);
@@ -70,6 +76,8 @@ export default function BookingRequestScreen({ route, navigation }) {
   const submit = async () => {
     setError("");
 
+    if (!hoarding) return setError("Hoarding details load nahi hui. Peeche jaake dobara try karo.");
+    if (startDate && toISO(startDate) < toISO(new Date())) return setError("Start date aaj ya uske baad chuno");
     if (!startDate || !endDate) return setError("Start aur end dono dates chuno");
     if (days < 1) return setError("End date start ke baad honi chahiye");
 
@@ -83,7 +91,9 @@ export default function BookingRequestScreen({ route, navigation }) {
       });
 
       const booking = data.data;
-      navigation.replace("BookingDetail", { bookingId: booking._id || booking.id });
+      const id = booking?._id || booking?.id;
+      if (id) navigation.replace("BookingDetail", { id });
+      else navigation.navigate("MyBookings");
     } catch (err) {
       if (!err.response)
         setError("Server se connect nahi ho paya. Internet check karo ya thodi der baad try karo.");
@@ -214,6 +224,7 @@ export default function BookingRequestScreen({ route, navigation }) {
           title={submitting ? "Bhej rahe hain..." : "Booking Request Bhejo"}
           onPress={submit}
           loading={submitting}
+          disabled={!hoarding || !startDate || !endDate || days < 1}
           style={{ marginTop: 6 }}
         />
 

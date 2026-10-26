@@ -206,3 +206,17 @@ eas submit --platform android         # after you have a Play Console account
 Bas itna hi — app ab teeno roles ke liye end-to-end kaam karta hai, real
 payments ke saath, real maps ke saath, real-time chat ke saath. Test karke
 dekh lo, aur jo bhi tweak/bug fix chahiye ho batana.
+
+## Mobile booking and branding update
+
+The app reuses the website logo for the launcher, native splash and session-loading screen.
+Booking requests now open booking details with the correct `id` route parameter.
+Guests retain their selected hoarding through login or registration with a client account.
+Calendar dates are sent as local YYYY-MM-DD values so India midnight stays on the selected day.
+The hoarding detail page includes the website photo gallery, dimensions, lighting, facing and pricing.
+
+Native icon/splash changes require a fresh Android build; a JavaScript reload cannot update them.
+Build from `adwall-app` with `eas build --profile preview --platform android` after setting
+your real EAS project ID. Test on a development/preview build, including guest login → selected
+hoarding → date range → quote request → booking details. Verify the launcher and cold-start splash
+on a device; Expo Go does not reproduce the installed app splash.
