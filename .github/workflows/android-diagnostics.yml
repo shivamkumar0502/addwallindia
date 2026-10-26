@@ -1,0 +1,35 @@
+name: Diagnose Android toolchain
+on:
+  push:
+    branches: [build/android-diagnostics]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: adwall-app
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install
+      - name: Bounded toolchain diagnostic
+        working-directory: adwall-app/android
+        run: |
+          set +e
+          timeout --signal=TERM 150s ./gradlew help --no-daemon --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g' --info --stacktrace --console=plain
+          result=$?
+          echo "Diagnostic Gradle exit code: $result"
+          exit 0
