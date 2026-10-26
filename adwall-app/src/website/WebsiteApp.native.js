@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, BackHandler, Image, Linking, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, BackHandler, Image, Linking, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as SplashScreen from "expo-splash-screen";
+import Constants from "expo-constants";
+import { createNativeGoogleSignIn, googleResultScript, validGoogleRequest } from "./nativeGoogle";
 import Button from "../components/Button";
 import { colors } from "../theme/colors";
-import { WEBSITE_BRIDGE } from "./bridge";
+import { WEBSITE_BRIDGE, NATIVE_GOOGLE_BOOTSTRAP } from "./bridge";
 import { classifyNavigation, isWebsiteUrl, parseDownload, paymentIntentUrl, WEBSITE_URL } from "./policy";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -19,6 +21,15 @@ export default function WebsiteApp() {
   const timer = useRef(null);
   const failed = useRef(false);
   const saving = useRef(false);
+  const nativeGoogle = useRef(null);
+  if (!nativeGoogle.current) {
+    nativeGoogle.current = createNativeGoogleSignIn({
+      loadSDK: () => require("@react-native-google-signin/google-signin"),
+      webClientId: Constants.expoConfig?.extra?.googleWebClientId,
+      iosClientId: Constants.expoConfig?.extra?.googleIosClientId,
+      platform: Platform.OS,
+    });
+  }
   const [source, setSource] = useState({ uri: WEBSITE_URL });
   const [instance, setInstance] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -85,6 +96,13 @@ export default function WebsiteApp() {
     if (!isWebsiteUrl(nativeEvent.url)) return;
     let message;
     try { message = JSON.parse(nativeEvent.data); } catch { return; }
+    if (!message || typeof message !== "object") return;
+    if (message.type === "google-signin") {
+      if (!validGoogleRequest(message, nativeEvent.url)) return;
+      const result = await nativeGoogle.current(message.clientId);
+      web.current?.injectJavaScript(googleResultScript(message.requestId, result));
+      return;
+    }
     if (message.type === "open" && typeof message.url === "string") { openWindow(message.url); return; }
     if (message.type === "download-error") {
       Alert.alert("Download nahi hua", "File ko browser se download karo ya dobara try karo.");
@@ -133,7 +151,8 @@ export default function WebsiteApp() {
         // Let our explicit navigation policy decide every scheme. Otherwise
         // WebView automatically sends non-whitelisted origins to the OS.
         originWhitelist={["*"]}
-        injectedJavaScript={WEBSITE_BRIDGE}
+        injectedJavaScriptBeforeContentLoaded={NATIVE_GOOGLE_BOOTSTRAP}
+        injectedJavaScript={NATIVE_GOOGLE_BOOTSTRAP + WEBSITE_BRIDGE}
         onMessage={onMessage}
         onShouldStartLoadWithRequest={(request) => {
           const kind = classifyNavigation(request.url);

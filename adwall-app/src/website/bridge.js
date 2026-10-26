@@ -67,3 +67,15 @@ export const WEBSITE_BRIDGE = `
 })();
 true;
 `;
+
+// This small bootstrap runs both before content and at document load. The event
+// covers React mounting before Android finishes its early script injection.
+export const NATIVE_GOOGLE_BOOTSTRAP = `
+(function () {
+  if (window.top !== window || location.protocol !== 'https:' ||
+      ${JSON.stringify(WEBSITE_HOSTS)}.indexOf(location.hostname) < 0) return;
+  window.__adwallNativeGoogle = 1;
+  window.dispatchEvent(new Event('adwall:native-ready'));
+})();
+true;
+`;

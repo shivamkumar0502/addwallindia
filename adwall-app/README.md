@@ -60,10 +60,12 @@ the actual website instead of trying to embed a native-only WebView.
 - Razorpay's normal HTTPS checkout/iframe runs in the WebView; bank popups and
   external UPI apps still require device testing. Returning from another app
   does not itself mark an order paid: the website/backend must verify payment.
-- Google may reject embedded sign-in. Google top-level sign-in navigations offer
-  the full website in the browser; email/password stays available in the app.
-  Browser and app sessions are separate. This is not a native Google OAuth
-  integration and does not spoof the user agent to bypass Google's policy.
+- The login/register Google button uses the native Google account picker in a
+  new APK. Its ID token returns only to the requesting AdWall auth page; the
+  existing backend verifies it and the website handles existing-user login or
+  new-user signup. Cancellation returns to the form without logging in. The
+  normal browser still uses Google Identity Services. Old APKs without the
+  native capability keep the browser behavior and require an update.
 - Website notification pages are included. Native push token registration is
   not integrated with the website session in this version.
 
@@ -84,7 +86,8 @@ Before release, test on an installed APK:
 
 - Cold start, actual launcher icon and splash; airplane mode → retry; Android
   Back through search, hoarding details and dashboard.
-- Client email login/register/logout and session persistence after restart;
+- Client email and native Google login/register/logout, account-picker cancel,
+  different accounts, and session persistence after restart;
   hoarding selection → dates → quote request → My Bookings → booking details.
 - Owner listing/photo upload, KYC/file upload, quotes, installation proof;
   client quote acceptance, agreement/PDF, Razorpay **test-mode** checkout,
@@ -94,3 +97,41 @@ Before release, test on an installed APK:
 
 Do not treat a successful JavaScript bundle as Android payment/Google-login
 acceptance. EAS project setup and device acceptance are required before release.
+
+## Native Google login setup (Android)
+
+1. In the same Google Cloud project as your existing Web OAuth client, create
+   an **Android** OAuth client for package **`com.adwallindia.app`**. Register
+   the **SHA-1 signing certificate fingerprint of the actual installed APK**.
+   An EAS preview APK, a local debug APK and a Play-signed release can use
+   different certificates; add the clients/fingerprints needed for each build.
+   Use EAS credentials (`eas credentials --platform android`) or Play Console
+   App integrity to find the relevant fingerprint. Do not put a signing key
+   or private credential in this repository.
+2. Use the existing **Web application** OAuth client ID as the token audience.
+   The frontend `VITE_GOOGLE_CLIENT_ID` and backend `GOOGLE_CLIENT_ID` must
+   identify that same Web client. The app normally reads this public client ID
+   from the requesting website button. You can pin it at APK build time with
+   `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (set the same value, not an Android ID).
+3. Redeploy `adwall-frontend` so the Google button can request the native picker.
+   Build and install a **new APK** containing the Google SDK. Both updates are
+   required; shipping only the website or hot-reloading an older APK is not
+   enough. Native Google login is not available in Expo Go.
+4. Test Google sign-in on an Android device with Google Play Services. Existing
+   users should reach their role dashboard; new users should reach the same
+   role/mobile verification signup flow used by the website. Check cancellation
+   and logout/login as another account. A developer error usually means the
+   package name, signing SHA-1 or Web client project does not match.
+
+The web button still separately needs `https://www.adwallindia.com` and
+`https://adwallindia.com` in the Web client's **Authorized JavaScript origins**.
+Native sign-in does not fix a missing website origin in Google Cloud.
+
+For iOS, also set `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` to an iOS OAuth client for
+your real bundle ID. `app.config.js` then adds the official plugin with its
+reversed URL scheme. Set the real `ios.bundleIdentifier`, rebuild and test iOS
+separately; without its client configuration the button reports setup pending.
+No Google client secret or Firebase project is required for this ID-token flow.
+
+The free package uses the original Google Sign-In SDK module. Follow its
+upstream migration guidance if changing to a different provider API later.
