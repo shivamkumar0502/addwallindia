@@ -21,27 +21,14 @@
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
-      ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "YOUR_GOOGLE_MAPS_ANDROID_API_KEY"
-        }
-      }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "AdWall India ko hoarding ki exact location set karne ke liye aapki location chahiye."
-        }
-      ],
-      "expo-notifications",
       "expo-status-bar",
       "expo-sharing",
-      "expo-font",
       [
         "expo-splash-screen",
         {

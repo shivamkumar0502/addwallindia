@@ -38,8 +38,11 @@ jobs:
           android.buildTypes.release.signingConfig = null
           GRADLE
       - name: Compile release app bundle
+        timeout-minutes: 25
         working-directory: adwall-app/android
-        run: ./gradlew :app:bundleRelease --no-daemon --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g' --console=plain
+        run: |
+          set -o pipefail
+          ./gradlew :app:bundleRelease --no-daemon --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g' --console=plain --stacktrace --info 2>&1 | tee ../release-build.log
       - name: Validate and package bundle
         run: |
           mkdir -p release-artifact
@@ -65,3 +68,10 @@ jobs:
           path: adwall-app/release-artifact/
           if-no-files-found: error
           retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-build-diagnostics
+          path: adwall-app/release-build.log
+          if-no-files-found: ignore
+          retention-days: 7

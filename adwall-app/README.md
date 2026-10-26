@@ -10,7 +10,8 @@ without rebuilding the native screens.
 
 This is a website-backed app, not a separately reimplemented native UI. It
 requires internet and a working website. Existing native screens remain in
-`src/screens` for reference, but `App.js` no longer mounts that navigator,
+`src/screens` for reference (their former native dependencies are not part of
+the release app), but `App.js` no longer mounts that navigator,
 native session provider, native push registration or a second chatbot.
 
 ## Run and build
@@ -157,3 +158,10 @@ managed by EAS or use the existing app's upload key when building an update.
 settings, so EAS's default `npm ci` does not fail on omitted peer-only packages.
 Build configuration is not a completed/signed AAB; an authenticated Expo
 account, actual project ID and Android signing credentials are still needed.
+
+The website-backed release includes only the native modules it actually uses:
+Google sign-in, WebView, safe-area layout, file sharing/storage, splash/status
+bar and Expo core. Former native maps, Razorpay, navigation, animation, image
+picker and push modules are not compiled into this app. Website maps, uploads,
+checkout and notification pages still run inside the website. Android location
+permissions remain declared for WebView geolocation.
