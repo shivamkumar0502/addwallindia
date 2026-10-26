@@ -163,7 +163,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    // Sign-in failures are not expired application sessions. Refreshing here
+    // used to replace Google's useful error with a page redirect to /login.
+    const publicAuthRequest = /\/auth\/(login|register|google(?:\/complete)?|refresh)(?:[?#]|$)/.test(original?.url || "");
+    if (error.response?.status === 401 && original && !publicAuthRequest && !original._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
