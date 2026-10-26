@@ -21,15 +21,22 @@ const saveSession = async (data) => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [bookingIntent, setBookingIntent] = useState(null);
 
   useEffect(() => {
     (async () => {
-      const [savedUser, token] = await Promise.all([
-        AsyncStorage.getItem("adwall_user"),
-        AsyncStorage.getItem("accessToken"),
-      ]);
-      if (savedUser && token) setUser(JSON.parse(savedUser));
-      setLoading(false);
+      try {
+        const [savedUser, token] = await Promise.all([
+          AsyncStorage.getItem("adwall_user"),
+          AsyncStorage.getItem("accessToken"),
+        ]);
+        if (savedUser && token) setUser(JSON.parse(savedUser));
+      } catch {
+        // Invalid or unavailable stored sessions must not trap startup on a spinner.
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
     })();
 
     setOnAuthFail(() => setUser(null));
@@ -79,6 +86,7 @@ export const AuthProvider = ({ children }) => {
     } catch {}
     await AsyncStorage.multiRemove(["accessToken", "refreshToken", "adwall_user"]);
     setUser(null);
+    setBookingIntent(null);
   }, []);
 
   const updateUser = useCallback(async (updates) => {
@@ -94,6 +102,8 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         loading,
+        bookingIntent,
+        setBookingIntent,
         login,
         register,
         googleLogin,
