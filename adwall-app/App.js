@@ -1,61 +1,15 @@
-// import React from "react";
-// import { StatusBar } from "expo-status-bar";
-// import { SafeAreaProvider } from "react-native-safe-area-context";
-// import { GestureHandlerRootView } from "react-native-gesture-handler";
-// import { AuthProvider, useAuth } from "./src/context/AuthContext";
-// import AppNavigator from "./src/navigation/AppNavigator";
-// import usePushNotifications from "./src/hooks/usePushNotifications";
-
-// function Root() {
-//   const { isAuthenticated } = useAuth();
-//   usePushNotifications(isAuthenticated);
-//   return <AppNavigator />;
-// }
-
-// export default function App() {
-//   return (
-//     <GestureHandlerRootView style={{ flex: 1 }}>
-//       <SafeAreaProvider>
-//         <AuthProvider>
-//           <StatusBar style="dark" />
-//           <Root />
-//         </AuthProvider>
-//       </SafeAreaProvider>
-//     </GestureHandlerRootView>
-//   );
-// }
-
 import React from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { AuthProvider, useAuth } from "./src/context/AuthContext";
-import AppNavigator from "./src/navigation/AppNavigator";
-import usePushNotifications from "./src/hooks/usePushNotifications";
-// Addy chatbot — web pe pehle se tha, app me nahi tha
-import Chatbot from "./src/components/Chatbot";
+import WebsiteApp from "./src/website/WebsiteApp";
 
-function Root() {
-  const { isAuthenticated } = useAuth();
-  usePushNotifications(isAuthenticated);
-  return (
-    <>
-      <AppNavigator />
-      {/* Floating button har screen ke upar */}
-      <Chatbot />
-    </>
-  );
-}
-
+// The live website is the app's UI and auth source of truth. Do not mount the
+// old native AuthProvider, navigator or duplicate chatbot over the website.
 export default function App() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <AuthProvider>
-          <StatusBar style="dark" />
-          <Root />
-        </AuthProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <StatusBar style="dark" />
+      <WebsiteApp />
+    </SafeAreaProvider>
   );
 }

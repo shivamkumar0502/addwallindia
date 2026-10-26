@@ -54,8 +54,6 @@ export default function BookingRequestScreen({ route, navigation }) {
   }, [hoardingId]);
 
   const days = useMemo(() => {
-    if (!hoarding) return setError("Hoarding details load nahi hui. Peeche jaake dobara try karo.");
-    if (startDate && toISO(startDate) < toISO(new Date())) return setError("Start date aaj ya uske baad chuno");
     if (!startDate || !endDate) return 0;
     return Math.ceil((endDate - startDate) / 86400000);
   }, [startDate, endDate]);

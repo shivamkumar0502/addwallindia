@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.adwallindia.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -41,7 +41,16 @@
       "expo-notifications",
       "expo-status-bar",
       "expo-sharing",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
     ],
     "extra": {
       "apiUrl": "https://addwallindia-2.onrender.com/api",
