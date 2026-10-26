@@ -53,10 +53,7 @@
       ]
     ],
     "extra": {
-      "apiUrl": "https://addwallindia-2.onrender.com/api",
-      "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
-      }
+      "apiUrl": "https://addwallindia-2.onrender.com/api"
     }
   }
 }

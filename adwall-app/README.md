@@ -26,8 +26,9 @@ npx expo start
 For an installable Android preview:
 
 1. Authenticate to your own Expo/EAS account.
-2. Run `eas init` and replace `YOUR_EAS_PROJECT_ID` in `app.json` with the real
-   project ID. Do not put API keys or backend secrets in app configuration.
+2. Run `eas init` to create or link your real EAS project. If the CLI asks
+   for a manual config update, put its real ID in `expo.extra.eas.projectId`
+   in `app.json`. Do not put API keys or backend secrets in app configuration.
 3. Run `eas build --profile preview --platform android`.
 4. Install the resulting APK and test the flows below.
 
@@ -135,3 +136,24 @@ No Google client secret or Firebase project is required for this ID-token flow.
 
 The free package uses the original Google Sign-In SDK module. Follow its
 upstream migration guidance if changing to a different provider API later.
+
+## Google Play AAB build
+
+From `adwall-app`, after linking the correct Expo account/project:
+
+```sh
+npm ci
+npx eas-cli@latest build --platform android --profile production
+```
+
+The production profile explicitly uses store distribution, the production
+environment and `android.buildType: app-bundle`. Its build artifact is a
+signed `.aab`; preview and development profiles still produce APKs. Download
+the `.aab` from the completed EAS build page and upload it to Play Console.
+A bundle cannot be installed directly on a phone. Keep the upload signing key
+managed by EAS or use the existing app's upload key when building an update.
+
+`.npmrc` records `legacy-peer-deps=true`, matching the lockfile generation
+settings, so EAS's default `npm ci` does not fail on omitted peer-only packages.
+Build configuration is not a completed/signed AAB; an authenticated Expo
+account, actual project ID and Android signing credentials are still needed.
